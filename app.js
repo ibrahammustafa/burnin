@@ -49,8 +49,9 @@
     const d = p.diagBest || 0, t = ratingPct(p.tech, role.tech.length), b = ratingPct(p.behave, role.behavioral.length);
     return Math.round(d * 0.5 + t * 0.35 + b * 0.15);
   }
-  const ownerActive = () => !!C.ownerMode && !store.get("preview", false);
-  const isPro = () => ownerActive() || store.get("pro", false);
+  const ownerActive = () => false;
+  let entitled = null, sessionUser = null;
+  const isPro = () => !!entitled;
   function canAccess(role, mode) { if (mode === "diag" || isPro()) return true; return ROLES.indexOf(role) < (C.freeFullTracks || 0); }
 
   /* ---------------- theme */
@@ -144,20 +145,150 @@
     $$("[data-buy]", scope).forEach(b => b.addEventListener("click", () => buy(b.dataset.buy)));
   }
   function buy(plan) {
-    const url = (C.checkout || {})[plan];
+    const url = (testCheckoutOn() ? C.testCheckout || {} : C.checkout || {})[plan];
     track("checkout-" + plan);
-    if (url) { window.open(url, "_blank", "noopener"); return; }
-    openModal(`<h2>Checkout isn't connected yet</h2>
-      <p>Payments run through Stripe Payment Links, so there's no server to maintain.</p>
-      <ol><li>Create a Stripe account and add your products (Pro monthly, Pro yearly, Sprint).</li>
-      <li>Create a Payment Link for each one. On the Pro links, turn on <b>Include a free trial</b> and set ${C.trialDays || 7} days.</li><li>Paste the links into <code>assets/js/config.js</code> under <code>checkout</code>.</li></ol>
-      <p>Until then, these buttons show this note.</p>
-      <a class="btn btn-primary" href="#pricing" data-close>Got it</a>`);
+    if (isPro()) return accountModal();
+    if (url) {
+      if (!sessionUser) { store.set("pending", plan); return authModal("signup"); }
+      store.set("pending", null);
+      location.assign(`${url}?client_reference_id=${encodeURIComponent(sessionUser.id)}&prefilled_email=${encodeURIComponent(sessionUser.email || "")}`);
+      return;
+    }
+    openModal(`<h2>Plans open soon</h2>
+      <p>Checkout isn't open yet. The free diagnostics and your first full track are ready now.</p>
+      <a class="btn btn-primary" href="#tracks" data-close>Browse tracks</a>`);
   }
   function paywall(role) {
     openModal(`<span class="chip cu">Pro track</span><h2>${esc(role.title)}</h2>
       <p>The diagnostic is free. Technical drills, model answers and behavioral prompts for this role are part of Pro or a 30-day Sprint.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn btn-primary" href="#pricing" data-close>See plans</a><a class="btn btn-ghost" href="#test-${role.id}-diag" data-close>Take the free diagnostic</a></div>`);
+  }
+
+  /* ---------------- accounts: Supabase auth, server-side entitlements */
+  const sb = (window.supabase && C.supabaseUrl) ? window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey, { auth: { flowType: "pkce", persistSession: true, detectSessionInUrl: true } }) : null;
+  function testCheckoutOn() {
+    try {
+      if (new URLSearchParams(location.search).get("stripe") === "test") sessionStorage.setItem("burnin:testCheckout", "1");
+      return sessionStorage.getItem("burnin:testCheckout") === "1";
+    } catch (e) { return false; }
+  }
+  const siteUrl = () => location.origin + location.pathname;
+  async function loadAccess() {
+    entitled = null;
+    if (!sb || !sessionUser) return;
+    const { data, error } = await sb.from("entitlements").select("plan,status,access_until").eq("user_id", sessionUser.id).maybeSingle();
+    if (error) throw error;
+    const live = data && ["active", "trialing", "past_due"].includes(data.status) && (!data.access_until || Date.parse(data.access_until) > Date.now());
+    if (!live) return;
+    const res = await sb.from("premium_tracks").select("role_id,tech,behavioral");
+    if (res.error) throw res.error;
+    res.data.forEach(row => { const r = ROLES.find(x => x.id === row.role_id); if (r) { r.tech = row.tech; r.behavioral = row.behavioral; } });
+    entitled = data;
+  }
+  function drawAcct() { const b = $("#acct-btn"); if (b) b.textContent = sessionUser ? "Account" : "Sign in"; }
+  function authModal(mode, note) {
+    if (!sb) return toast("Sign-in isn't available right now. Please try again later.");
+    const signup = mode === "signup", reset = mode === "reset";
+    openModal(`<h2>${signup ? "Create your account" : reset ? "Reset your password" : "Sign in"}</h2>
+      ${note ? `<p>${esc(note)}</p>` : store.get("pending", null) ? "<p>Create an account or sign in first, then you'll go straight to checkout.</p>" : ""}
+      <form class="acct-form" id="acct-form">
+        <label>Email<input id="acct-email" type="email" required autocomplete="email"></label>
+        ${reset ? "" : `<label>Password<input id="acct-pass" type="password" required minlength="8" autocomplete="${signup ? "new-password" : "current-password"}"></label>`}
+        <p class="acct-err" id="acct-err" role="alert" hidden></p>
+        <button class="btn btn-primary" type="submit">${signup ? "Create account" : reset ? "Send reset link" : "Sign in"}</button>
+      </form>
+      <div class="acct-alt">
+        ${signup ? '<button type="button" data-auth="signin">Have an account? Sign in</button>' : '<button type="button" data-auth="signup">Create an account</button>'}
+        ${mode === "signin" ? '<button type="button" data-auth="reset">Forgot password?</button>' : ""}
+      </div>`);
+    $$("[data-auth]").forEach(b => b.addEventListener("click", () => authModal(b.dataset.auth)));
+    const form = $("#acct-form");
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const email = $("#acct-email").value.trim(), pass = reset ? "" : $("#acct-pass").value, err = $("#acct-err"), sub = form.querySelector("button[type=submit]");
+      err.hidden = true; sub.disabled = true;
+      try {
+        if (reset) {
+          const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: siteUrl() });
+          if (error) throw error;
+          return authModal("signin", "If that email has an account, a reset link is on its way.");
+        }
+        if (signup) {
+          const { data, error } = await sb.auth.signUp({ email, password: pass, options: { emailRedirectTo: siteUrl() } });
+          if (error) throw error;
+          if (!data.session) return authModal("signin", "Check your email and click the link to confirm your account, then sign in.");
+        } else {
+          const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+          if (error) throw error;
+        }
+      } catch (ex) { err.textContent = ex.message || "Something went wrong. Please try again."; err.hidden = false; sub.disabled = false; }
+    });
+  }
+  function newPasswordModal() {
+    openModal(`<h2>Choose a new password</h2><form class="acct-form" id="pw-form">
+      <label>New password<input id="pw-new" type="password" required minlength="8" autocomplete="new-password"></label>
+      <p class="acct-err" id="pw-err" role="alert" hidden></p>
+      <button class="btn btn-primary" type="submit">Save password</button></form>`);
+    $("#pw-form").addEventListener("submit", async e => {
+      e.preventDefault();
+      const { error } = await sb.auth.updateUser({ password: $("#pw-new").value });
+      if (error) { const x = $("#pw-err"); x.textContent = error.message; x.hidden = false; return; }
+      closeModal(); toast("Password updated.");
+    });
+  }
+  function accountModal() {
+    if (!sessionUser) return authModal("signin");
+    const until = entitled && entitled.access_until ? new Date(entitled.access_until).toLocaleDateString() : "";
+    const label = !entitled ? "Free plan" : entitled.plan === "sprint" ? `Sprint, access until ${until}` : entitled.plan === "comp" ? "Full access" : entitled.status === "trialing" ? "Pro, free trial" : "Pro";
+    openModal(`<h2>Your account</h2><p>${esc(sessionUser.email)}</p><p><b>${esc(label)}</b></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${entitled ? (entitled.plan === "pro" ? `<a class="btn btn-primary" href="${esc(C.manageUrl)}" target="_blank" rel="noopener">Manage or cancel subscription</a>` : "") : '<a class="btn btn-primary" href="#pricing" data-close>See plans</a>'}
+        <button class="btn btn-ghost" id="sign-out" type="button">Sign out</button>
+      </div>`);
+    $("#sign-out").addEventListener("click", async () => { await sb.auth.signOut(); location.hash = "home"; location.reload(); });
+  }
+  async function refreshAccess(session) {
+    sessionUser = session ? session.user : null;
+    try { await loadAccess(); } catch (e) { toast("We couldn't load your plan. Please refresh."); }
+    drawAcct();
+  }
+  async function afterCheckout() {
+    const q = new URLSearchParams(location.search);
+    if (q.get("checkout") !== "success") return;
+    q.delete("checkout");
+    const rest = q.toString();
+    history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+    toast("Payment received. Unlocking your plan…");
+    for (let i = 0; i < 15 && !isPro(); i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try { await loadAccess(); } catch (e) { /* retry */ }
+    }
+    if (isPro()) { toast("You're unlocked. Every track is open."); location.hash = "tracks"; route(); }
+    else toast("Your payment went through, but unlocking is taking longer than usual. Refresh in a minute, or contact us.");
+  }
+  async function bootAccount() {
+    const top = $(".top-actions");
+    if (top) {
+      const b = document.createElement("button");
+      b.id = "acct-btn"; b.type = "button"; b.className = "btn btn-ghost btn-sm"; b.textContent = "Sign in";
+      b.addEventListener("click", accountModal);
+      top.insertBefore(b, top.lastElementChild);
+    }
+    if (!sb) return;
+    const { data } = await sb.auth.getSession();
+    await refreshAccess(data.session);
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") { setTimeout(newPasswordModal, 0); return; }
+      const next = session ? session.user.id : null, prev = sessionUser ? sessionUser.id : null;
+      if (next === prev) return;
+      setTimeout(async () => {
+        await refreshAccess(session);
+        if (!modal.hidden) closeModal();
+        const plan = store.get("pending", null);
+        if (session && plan && !isPro()) return buy(plan);
+        route();
+      }, 0);
+    });
   }
 
   /* ---------------- views */
@@ -592,18 +723,9 @@
   const mnav = document.createElement("nav"); mnav.className = "mobile-nav"; mnav.setAttribute("aria-label", "Quick");
   mnav.innerHTML = `<a href="#home" data-m="home">Home</a><a href="#tracks" data-m="tracks">Tracks</a><a href="#progress" data-m="progress">Progress</a><a href="#pricing" data-m="pricing">Pricing</a>`;
   document.body.appendChild(mnav);
-  if (C.ownerMode) {
-    const b = document.createElement("button"); b.className = "owner"; b.type = "button";
-    const label = () => { b.textContent = store.get("preview", false) ? "Visitor preview" : "Owner mode"; };
-    label(); document.body.appendChild(b);
-    b.addEventListener("click", () => {
-      const prev = store.get("preview", false);
-      openModal(`<h2>${prev ? "Visitor preview" : "Owner mode"}</h2>
-        <p>${prev ? "You're seeing the site the way a free visitor does: locked Pro tracks and the paywall." : "Every track is unlocked on this device so you can study. Visitors won't see this button once you set ownerMode to false in config.js."}</p>
-        <button class="btn btn-primary" id="flip">${prev ? "Back to owner mode" : "Preview as a free visitor"}</button>`);
-      $("#flip").onclick = () => { store.set("preview", !prev); label(); closeModal(); route(); toast(prev ? "Owner mode on. Everything unlocked." : "Previewing as a free visitor."); };
-    });
-  }
-
-  route();
+  (async () => {
+    try { await bootAccount(); } catch (e) { /* the free site still works */ }
+    route();
+    afterCheckout();
+  })();
 })();
