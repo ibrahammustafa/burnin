@@ -1,0 +1,91 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>BurnIn Interview Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Technical interview prep for hardware, lab and data center roles at NVIDIA and the companies building AI. Diagnostics, drills with model answers, and progress tracking.">
+<meta property="og:title" content="BurnIn Interview Lab">
+<meta property="og:description" content="Burn in before you ship. Technical interview prep for hardware, lab and data center roles.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0E4D43">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E4D43'/%3E%3Cpath d='M6 20h5l3-9 4 13 3-7h5' fill='none' stroke='%23E39A5C' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/css/style.css">
+<a class="skip" href="#app">Skip to content</a>
+
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#home" aria-label="BurnIn home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" class="brand-chip"/><path d="M6 20h5l3-9 4 13 3-7h5" class="brand-trace"/></svg>
+      <span>BurnIn</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#tracks" data-nav="tracks">Tracks</a>
+      <a href="#progress" data-nav="progress">Progress</a>
+      <a href="#pricing" data-nav="pricing">Pricing</a>
+    </nav>
+    <div class="top-actions">
+      <button class="kbd-btn" id="cmdk-open" type="button" aria-label="Search roles and pages">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.2 13.2 3.8 3.8"/></svg>
+        <span class="kbd-hint">Search</span><kbd>⌘K</kbd>
+      </button>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch theme">
+        <svg class="i-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6"/><path d="M10 1.8v2.4M10 15.8v2.4M1.8 10h2.4M15.8 10h2.4M4.2 4.2l1.7 1.7M14.1 14.1l1.7 1.7M4.2 15.8l1.7-1.7M14.1 5.9l1.7-1.7"/></svg>
+        <svg class="i-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.6A7 7 0 0 1 7.4 3.5a7 7 0 1 0 9.1 9.1z"/></svg>
+      </button>
+      <a class="btn btn-primary btn-sm hide-sm" href="#test-nvidia-dc-infra-diag">Start diagnostic</a>
+    </div>
+  </div>
+</header>
+
+<main id="app" tabindex="-1"></main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand">
+      <a class="brand" href="#home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" class="brand-chip"/><path d="M6 20h5l3-9 4 13 3-7h5" class="brand-trace"/></svg><span>BurnIn</span></a>
+      <p>Burn in before you ship. Interview prep for the people who build, cable, validate and run AI infrastructure.</p>
+    </div>
+    <div class="foot-cols">
+      <div><h4>Practice</h4><a href="#tracks">All tracks</a><a href="#progress">Your progress</a><a href="#test-nvidia-dc-infra-diag">Free diagnostic</a></div>
+      <div><h4>Company</h4><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#waitlist">Waitlist</a></div>
+    </div>
+  </div>
+  <p class="legal">BurnIn is independent and is not affiliated with, sponsored by or endorsed by NVIDIA or any other company named. Company names identify the roles each track prepares you for. Questions are original practice material, not leaked interview content.</p>
+</footer>
+
+<div class="cmdk" id="cmdk" hidden>
+  <div class="cmdk-scrim" data-close></div>
+  <div class="cmdk-panel" role="dialog" aria-modal="true" aria-label="Search">
+    <input id="cmdk-input" type="text" placeholder="Jump to a role, test or page…" autocomplete="off" aria-label="Search">
+    <ul id="cmdk-list" role="listbox"></ul>
+    <p class="cmdk-foot"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>↵</kbd> open <kbd>esc</kbd> close</p>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-scrim" data-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button class="icon-btn modal-x" type="button" data-close aria-label="Close">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>
+    </button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/data/nvidia.js"></script>
+<script src="assets/js/data/apple.js"></script>
+<script src="assets/js/data/google.js"></script>
+<script src="assets/js/data/amd.js"></script>
+<script src="assets/js/data/samsung.js"></script>
+<script src="assets/js/data/meta.js"></script>
+<script src="assets/js/data/xai.js"></script>
+<script src="assets/js/data/openai.js"></script>
+<script src="assets/js/data/anthropic.js"></script>
+<script src="assets/js/data/gov.js"></script>
+<script src="assets/js/app.js"></script>
+
+</body></html>
