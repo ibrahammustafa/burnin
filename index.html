@@ -11,6 +11,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
+<div id="boot" aria-hidden="true"><div class="bt"><div>POWER RAILS <b>OK</b></div><div>MEMORY TRAINING <b>OK</b></div><div>LINK UP <b>OK</b></div><strong>BURN IN</strong></div></div>
+<script>try{var b=document.getElementById("boot");if(sessionStorage.getItem("burnin:booted"))b.remove();else{sessionStorage.setItem("burnin:booted","1");b.addEventListener("animationend",function(e){if(e.target===b)b.remove()})}}catch(e){}</script>
+<div id="scrollbar" aria-hidden="true"></div>
+<div id="wiper" aria-hidden="true" hidden><i class="w1"></i><i class="w2"><span>BurnIn</span></i></div>
 <a class="skip" href="#app">Skip to content</a>
 
 <header class="topbar" id="topbar">
@@ -86,6 +90,9 @@
 <script src="xai.js"></script>
 <script src="openai.js"></script>
 <script src="anthropic.js"></script>
+<script src="cisco.js"></script>
+<script src="intel.js"></script>
+<script src="broadcom.js"></script>
 <script src="gov.js"></script>
 <script src="app.js"></script>
 

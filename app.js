@@ -303,7 +303,7 @@
       <div class="wrap hero-in">
         <div>
           <span class="status"><span class="led"></span>${PACKS.length} company packs · ${ROLES.length} roles</span>
-          <h1>Burn in<span class="cu">before you ship.</span></h1>
+          <h1><span class="ln"><span>Burn in</span></span><span class="ln cu"><span style="--d:.12s">before you ship.</span></span></h1>
           <p class="hero-sub">${esc(C.tagline || "")}</p>
           <div class="hero-cta"><a class="btn btn-primary" href="#test-${ROLES[0].id}-diag">Take a free diagnostic ${ICON.arrow}</a><a class="btn btn-ghost" href="#tracks">Browse tracks</a></div>
           <div class="hero-meta"><div><b class="tnum" data-count="${totalQ}">0</b><span>practice questions</span></div><div><b class="tnum" data-count="${ROLES.length}">0</b><span>role tracks</span></div><div><b class="tnum">90s</b><span>per diagnostic Q</span></div></div>
@@ -325,7 +325,7 @@
       </div></div></section>
 
     <section class="section"><div class="wrap">
-      <div class="sec-head"><span class="eyebrow">Tracks</span><h2>${PACKS.length} companies, one bench</h2><p>NVIDIA, Apple, Google, AMD, Samsung, Meta, X / xAI, OpenAI, Anthropic, plus cleared roles at government contractors. Every pack has at least 20 practice items.</p></div>
+      <div class="sec-head"><span class="eyebrow">Tracks</span><h2>${PACKS.length} companies, one bench</h2><p>NVIDIA, Apple, Google, AMD, Samsung, Meta, X / xAI, OpenAI, Anthropic, Cisco, Intel, Broadcom, plus cleared roles at government contractors. Every pack has at least 20 practice items.</p></div>
       <div class="filters">${PACKS.map(p => `<button class="chip cu" style="cursor:pointer;border:0;padding:9px 12px" data-co="${esc(p.company)}">${esc(p.company)} · ${p.roles.length}</button>`).join("")}</div>
       <div class="grid">${PACKS.map((p, i) => roleCard(ROLES.find(r => r.pack === p), i)).join("")}</div>
       <div style="margin-top:20px"><a class="btn btn-ghost" href="#tracks">See all ${ROLES.length} tracks ${ICON.arrow}</a></div>
@@ -662,17 +662,86 @@
     const ro = new ResizeObserver(build); ro.observe(cv); onCleanup(() => { ro.disconnect(); cancelAnimationFrame(traceRAF); });
   }
 
+  /* ---------------- motion helpers */
+  function addRail() {
+    const hero = $(".hero", app); if (!hero || $(".rail", app)) return;
+    const set = PACKS.map(p => `<a href="#tracks" data-rail="${esc(p.company)}">${esc(p.company)}</a>`).join("");
+    hero.insertAdjacentHTML("afterend", `<div class="rail"><div class="rail-track"><div class="rail-set">${set}</div><div class="rail-set" aria-hidden="true">${set.replace(/<a /g, '<a tabindex="-1" ')}</div></div></div>`);
+  }
+  app.addEventListener("click", e => { const l = e.target.closest("[data-rail]"); if (l) store.set("trackCo", l.dataset.rail); });
+  const navEl = $(".nav"), navPill = document.createElement("span");
+  navPill.className = "nav-pill"; if (navEl) navEl.prepend(navPill);
+  function movePill() {
+    if (!navEl) return;
+    const a = $("a.active", navEl);
+    if (!a) { navPill.style.opacity = 0; return; }
+    navPill.style.opacity = 1; navPill.style.width = a.offsetWidth + "px"; navPill.style.transform = `translateX(${a.offsetLeft}px)`;
+  }
+  window.addEventListener("resize", movePill);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(movePill);
+  if ("IntersectionObserver" in window && !reduced()) {
+    document.documentElement.classList.add("js-motion");
+    const io = new IntersectionObserver(items => {
+      let k = 0;
+      items.forEach(it => { if (!it.isIntersecting) return; it.target.style.setProperty("--i", k++ % 5); it.target.classList.add("in"); io.unobserve(it.target); });
+    }, { rootMargin: "0px 0px -5% 0px" });
+    const watch = () => {
+      $$(".sec-head, .step, .tbl-wrap, .band", app).forEach(el => { if (!el.classList.contains("rise")) el.classList.add("reveal"); });
+      $$(".rise:not(.in), .reveal:not(.in)", app).forEach(el => io.observe(el));
+    };
+    new MutationObserver(watch).observe(app, { childList: true, subtree: true });
+    app.addEventListener("animationend", e => { if (e.animationName === "rise") e.target.classList.remove("rise"); });
+  }
+  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches && !reduced()) {
+    let frame = 0;
+    app.addEventListener("pointermove", e => {
+      const c = e.target.closest("a.card, .plan"); if (!c || frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        c.style.setProperty("--mx", x * 100 + "%"); c.style.setProperty("--my", y * 100 + "%");
+        c.style.setProperty("--ry", (x - .5) * 5 + "deg"); c.style.setProperty("--rx", (.5 - y) * 5 + "deg");
+      });
+    });
+    app.addEventListener("pointerout", e => { const c = e.target.closest("a.card, .plan"); if (c && !c.contains(e.relatedTarget)) { c.style.setProperty("--rx", "0deg"); c.style.setProperty("--ry", "0deg"); } });
+  }
+  const sbar = $("#scrollbar");
+  let sTick = 0;
+  const drawBar = () => { sTick = 0; const m = document.documentElement.scrollHeight - innerHeight; if (sbar) sbar.style.transform = `scaleX(${m > 0 ? Math.min(1, scrollY / m) : 0})`; };
+  window.addEventListener("scroll", () => { if (!sTick) sTick = requestAnimationFrame(drawBar); }, { passive: true });
+
   /* ---------------- router */
   let keyHandler = null;
   document.addEventListener("keydown", e => { if (keyHandler && modal.hidden && $("#cmdk").hidden) keyHandler(e); });
-  function transition(fn) { if (document.startViewTransition && !reduced()) document.startViewTransition(fn); else fn(); }
+  /* slide wipe between pages: direction follows the page order */
+  const wiper = $("#wiper"), wipeRank = h => !h || h === "home" || h === "faq" || h === "waitlist" ? 0 : h === "tracks" ? 1 : h.startsWith("role-") ? 2 : h.startsWith("test-") ? 3 : h === "progress" ? 4 : h === "pricing" ? 5 : 6;
+  let lastHash = null, wipeBusy = false, wipeNext = null;
+  const settle = anims => Promise.race([Promise.all(anims.map(x => x.finished)), new Promise(r => setTimeout(r, 520))]).catch(() => {});
+  async function wipe(fn, d) {
+    if (wipeBusy) { wipeNext = fn; return; }
+    wipeBusy = true; wipeNext = fn; wiper.hidden = false;
+    const [w1, w2] = [$(".w1", wiper), $(".w2", wiper)], ease = "cubic-bezier(.76,0,.24,1)";
+    const slide = (el, from, to, delay) => el.animate([{ transform: `translateX(${from}%)` }, { transform: `translateX(${to}%)` }], { duration: 250, delay, easing: ease, fill: "both" });
+    const inn = [slide(w1, -100 * d, 0, 0), slide(w2, -100 * d, 0, 60)];
+    await settle(inn);
+    const run = wipeNext; wipeNext = null; if (run) run();
+    const out = [slide(w2, 0, 100 * d, 40), slide(w1, 0, 100 * d, 100)];
+    await settle(out);
+    inn.concat(out).forEach(x => x.cancel()); wiper.hidden = true; wipeBusy = false;
+    if (wipeNext) { const n = wipeNext; wipeNext = null; n(); }
+  }
+  function transition(fn) {
+    const h = decodeURIComponent(location.hash.slice(1)), prev = lastHash; lastHash = h;
+    if (prev === null || prev === h || reduced() || document.hidden || !wiper || !wiper.animate) return fn();
+    wipe(fn, wipeRank(h) >= wipeRank(prev) ? 1 : -1);
+  }
   function route() {
     cleanup.forEach(f => { try { f(); } catch (e) { /* ignore */ } }); cleanup = []; keyHandler = null;
     const h = decodeURIComponent(location.hash.slice(1));
     let nav = "", scrollTo = null;
     const run = () => {
-      if (!h || h === "home") viewHome();
-      else if (h === "faq" || h === "waitlist") { viewHome(); scrollTo = h; }
+      if (!h || h === "home") { viewHome(); addRail(); }
+      else if (h === "faq" || h === "waitlist") { viewHome(); addRail(); scrollTo = h; }
       else if (h === "tracks") { viewTracks(); nav = "tracks"; }
       else if (h === "progress") { viewProgress(); nav = "progress"; }
       else if (h === "pricing") { viewPricing(); nav = "pricing"; }
@@ -681,6 +750,7 @@
       else viewMissing();
       $$("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === nav));
       $$(".mobile-nav a").forEach(a => a.classList.toggle("active", (a.dataset.m || "") === (nav || "home")));
+      movePill();
       if (scrollTo) { const el = document.getElementById(scrollTo); if (el) setTimeout(() => el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }), 60); }
       else window.scrollTo({ top: 0 });
       trackPage();
